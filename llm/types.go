@@ -31,7 +31,24 @@ const (
 	// It has no readable text; it is kept and replayed unchanged, because the
 	// provider expects the turn's reasoning blocks back exactly as it sent them.
 	BlockRedactedThinking BlockType = "redacted_thinking"
+	// BlockImage and BlockDocument carry binary content a vision-capable model
+	// reads: a raster image, or a document (a PDF, read directly including its
+	// own images). Both keep their bytes in Source (base64). They appear only in
+	// user input, never in a model's output, and are sent only on the Anthropic
+	// Messages API format (see SupportsVision); the OpenAI adapters have no shape
+	// for them and reject a request that carries one (CodeUnsupportedContent).
+	BlockImage    BlockType = "image"
+	BlockDocument BlockType = "document"
 )
+
+// Source carries the base64 bytes of an image or document content block
+// (BlockImage, BlockDocument). Its JSON is the Anthropic Messages API "source"
+// object, e.g. {"type":"base64","media_type":"image/png","data":"..."}.
+type Source struct {
+	Type      string `json:"type"`                 // "base64"
+	MediaType string `json:"media_type,omitempty"` // e.g. image/png, image/jpeg, application/pdf
+	Data      string `json:"data,omitempty"`       // base64-encoded bytes
+}
 
 // ContentBlock is one piece of message content. Which fields are populated
 // depends on Type. This is the Anthropic content-block union.
@@ -95,6 +112,12 @@ type ContentBlock struct {
 	// model sees only Content. Nil on success and on errors nothing classified.
 	ToolError *ToolError `json:"tool_error,omitempty"`
 
+	// Source is the base64 bytes of an image or document block (BlockImage,
+	// BlockDocument). It is a pointer with omitempty, so it is nil and omitted
+	// for every other block type — a text, thinking, tool_use or tool_result
+	// block marshals exactly as before this field existed.
+	Source *Source `json:"source,omitempty"`
+
 	// Truncated marks a tool_use block of a non-streaming response whose
 	// arguments the output limit cut short. An adapter sets it when it parses
 	// such a response (Provider.Complete); the agent loop then answers the call
@@ -122,6 +145,20 @@ func (b ContentBlock) MarshalJSON() ([]byte, error) {
 
 // TextBlock builds a text content block.
 func TextBlock(s string) ContentBlock { return ContentBlock{Type: BlockText, Text: s} }
+
+// ImageBlock builds an image content block from a media type (image/png,
+// image/jpeg, image/webp, image/gif) and base64-encoded bytes. It is read only
+// by a vision-capable provider (SupportsVision).
+func ImageBlock(mediaType, dataBase64 string) ContentBlock {
+	return ContentBlock{Type: BlockImage, Source: &Source{Type: "base64", MediaType: mediaType, Data: dataBase64}}
+}
+
+// DocumentBlock builds a document content block (a PDF: media type
+// application/pdf) from base64-encoded bytes. A vision-capable provider reads
+// the document directly, images and all, so there is no need to rasterize it.
+func DocumentBlock(mediaType, dataBase64 string) ContentBlock {
+	return ContentBlock{Type: BlockDocument, Source: &Source{Type: "base64", MediaType: mediaType, Data: dataBase64}}
+}
 
 // ToolResultText builds a tool_result block carrying a single text block.
 func ToolResultText(toolUseID, text string, isError bool) ContentBlock {

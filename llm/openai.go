@@ -378,6 +378,12 @@ func flattenText(blocks []ContentBlock) string {
 }
 
 func (p *openaiProvider) buildBody(req CompletionRequest, stream bool) ([]byte, error) {
+	// The Chat Completions shape has no place for an image or document block;
+	// reject it rather than drop it, so the caller can fall back to a
+	// vision-capable model instead of losing the pages silently.
+	if hasVisionBlock(req.Messages) {
+		return nil, errUnsupportedVision()
+	}
 	// A non-empty per-request override (req.Thinking) wins over
 	// Config.ThinkingType, except that a "disabled" the endpoint never asked
 	// for is left out (thinkingField): many OpenAI-compatible endpoints reject
