@@ -62,6 +62,11 @@ type orTool struct {
 }
 
 func (p *openaiResponsesProvider) buildBody(req CompletionRequest, stream bool) ([]byte, error) {
+	// The Responses input has no shape for an image or document block; reject it
+	// rather than drop it, so the caller can fall back to a vision-capable model.
+	if hasVisionBlock(req.Messages) {
+		return nil, errUnsupportedVision()
+	}
 	body := orReq{
 		Model:           p.cfg.Model,
 		Instructions:    joinSystem(req.System),

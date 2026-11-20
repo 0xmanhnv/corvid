@@ -41,6 +41,13 @@ const (
 	CodeInvalidConfig Code = "invalid_config"
 	// CodeInvalidArgument is an API call with an argument that cannot be used.
 	CodeInvalidArgument Code = "invalid_argument"
+
+	// CodeUnsupportedContent is a request that carries a content block the
+	// resolved provider/model cannot encode — an image or document block sent to
+	// a format that has no shape for it (the OpenAI adapters). It is surfaced,
+	// not dropped, so the caller can fall back to a vision-capable model rather
+	// than silently losing the pages. Retrying the same request does not help.
+	CodeUnsupportedContent Code = "unsupported_content"
 )
 
 // Error is corvid's base error: a stable Code for routing, a Message for
